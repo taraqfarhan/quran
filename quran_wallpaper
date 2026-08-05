@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+import pandas as pd
+import textwrap
+import os
+import time
+import subprocess
+import sys
+import json
+import argparse
+import csv
+import requests
+from PIL import Image, ImageDraw, ImageFont
+
+# ==== Paths & Constants ====
+QURAN_DIR = os.path.expanduser("~/.quran")
+DATA_DIR = os.path.join(QURAN_DIR, "data")
+CSV_PATH = os.path.join(DATA_DIR, "quran_en.csv")
+CONFIG_PATH = os.path.join(QURAN_DIR, "config.json")
+PLIST_PATH = os.path.expanduser("~/Library/LaunchAgents/com.user.quran-wallpaper.plist")
+LABEL = "com.user.quran-wallpaper"
+
+# Surah Names Dictionary
+SURAH_NAMES = [
+    "Al-Fatihah", "Al-Baqarah", "Aal-E-Imran", "An-Nisa", "Al-Ma'idah", "Al-An'am",
+    "Al-A'raf", "Al-Anfal", "At-Tawbah", "Yunus", "Hud", "Yusuf", "Ar-Ra'd", "Ibrahim",
+    "Al-Hijr", "An-Nahl", "Al-Isra", "Al-Kahf", "Maryam", "Ta-Ha", "Al-Anbiya", "Al-Hajj",
+    "Al-Mu'minun", "An-Nur", "Al-Furqan", "Ash-Shu'ara", "An-Naml", "Al-Qasas", "Al-Ankabut",
+    "Ar-Rum", "Luqman", "As-Sajdah", "Al-Ahzab", "Saba", "Fatir", "Ya-Sin", "As-Saffat",
+    "Sad", "Az-Zumar", "Ghafir", "Fussilat", "Ash-Shura", "Az-Zukhruf", "Ad-Dukhan",
+    "Al-Jathiyah", "Al-Ahqaf", "Muhammad", "Al-Fath", "Al-Hujurat", "Qaf", "Adh-Dhariyat",
+    "At-Tur", "An-Najm", "Al-Qamar", "Ar-Rahman", "Al-Waqi'ah", "Al-Hadid", "Al-Mujadila",
+    "Al-Hashr", "Al-Mumtahanah", "As-Saff", "Al-Jumu'ah", "Al-Munafiqun", "At-Taghabun",
+    "At-Talaq", "At-Tahrim", "Al-Mulk", "Al-Qalam", "Al-Haqqah", "Al-Ma'arij", "Nuh",
+    "Al-Jinn", "Al-Muzzammil", "Al-Muddaththir", "Al-Qiyamah", "Al-Insan", "Al-Mursalat",
+    "An-Naba", "An-Nazi'at", "Abasa", "At-Takwir", "Al-Infitar", "Al-Mutaffifin",
+    "Al-Inshiqaq", "Al-Buruj", "At-Tariq", "Al-A'la", "Al-Ghashiyah", "Al-Fajr",
+    "Al-Balad", "Ash-Shams", "Al-Lail", "Ad-Duha", "Ash-Sharh", "At-Tin", "Al-Alaq",
+    "Al-Qadr", "Al-Bayyinah", "Az-Zalzalah", "Al-Adiyat", "Al-Qari'ah", "At-Takathur",
+    "Al-Asr", "Al-Humazah", "Al-Fil", "Quraish", "Al-Ma'un", "Al-Kawthar", "Al-Kafirun",
+    "An-Nasr", "Al-Masad", "Al-Ikhlas", "Al-Falaq", "An-Nas"
+]
+
+# ==== Configuration Management ====
+def ensure_dirs():
+    os.makedirs(QURAN_DIR, exist_ok=True)
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+def load_config():
+    ensure_dirs()
+    default_config = {
+        "interval": 3600,
+        "font": "/System/Library/Fonts/Supplemental/Georgia.ttf",
+        "resolution": "2560x1600"
+    }
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, 'r') as f:
+                config = json.load(f)
+                default_config.update(config)
+        except:
+            pass
+    return default_config
+
+def save_config(config):
+    ensure_dirs()
+    with open(CONFIG_PATH, 'w') as f:
+        json.dump(config, f, indent=4)
+
+# ==== Data Management ====
+def download_data():
+    print("Downloading Quran data (Saheeh International English Translation)...")
+    EDITIONS = "quran-uthmani,en.sahih"
+    rows = []
+    try:
+        for surah in range(1, 115):
+            print(f"Fetching Surah {surah}/114...", end="\r")
+            r = requests.get(f"https://api.alquran.cloud/v1/surah/{surah}/editions/{EDITIONS}", timeout=30)
+            r.raise_for_status()
+            data = r.json()["data"]
+            en = data[1]  # English edition
+            for a in en["ayahs"]:
+                rows.append({
+                    "surah": surah,
+                    "ayah": a["numberInSurah"],
+                    "verse_key": f"{surah}:{a['numberInSurah']}",
+                    "text": a["text"]
+                })
+            time.sleep(0.2)  # Be nice to the API
+
+        print("\nWriting to CSV file...")
+        with open(CSV_PATH, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=["surah", "ayah", "verse_key", "text"])
+            w.writeheader()
+            w.writerows(rows)
+        print(f"Success! Wrote {len(rows)} verses to {CSV_PATH}")
+    except Exception as e:
+        print(f"\nFailed to download data: {e}")
+        sys.exit(1)
+
+def check_data_exists():
+    if not os.path.exists(CSV_PATH):
+        print("Quran data not found.")
+        # If running interactively in terminal, prompt the user
+        if sys.stdin.isatty():
+            response = input("Would you like to download it now? (Saheeh International) [y/N]: ")
+            if response.lower() == 'y':
+                download_data()
+            else:
+                print("Data is required to run this program. Exiting.")
+                sys.exit(1)
+        else:
+            # If running in the background (launchd), auto-download
+            print("Non-interactive environment detected. Attempting automatic download...")
+            download_data()
+
+# ==== Core Wallpaper Logic ====
+def get_verse_text(row):
+    surah_num = int(row['surah'])
+    ayah_num = int(row['ayah'])
+    verse_text = str(row['text'])
+    surah_name = SURAH_NAMES[surah_num - 1]
+    reference = f"{surah_name} ({surah_num}:{ayah_num})"
+    return reference, verse_text
+
+def create_wallpaper(image_path, reference, quote, width, height, font_path):
+    img = Image.new('RGB', (width, height), color=(0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    quote_length = len(quote)
+    if quote_length < 80: font_size = 90
+    elif quote_length < 150: font_size = 75
+    elif quote_length < 250: font_size = 60
+    else: font_size = 45
+
+    try:
+        ref_font = ImageFont.truetype(font_path, 45)
+        verse_font = ImageFont.truetype(font_path, font_size)
+    except IOError:
+        print(f"Warning: Font '{font_path}' not found. Using default.")
+        ref_font = ImageFont.load_default()
+        verse_font = ImageFont.load_default()
+
+    lines = textwrap.wrap(quote, width=45)
+    line_heights = [draw.textbbox((0,0), line, font=verse_font)[3] for line in lines]
+    total_verse_height = sum(line_heights) + (len(lines) * 20)
+
+    y = (height - total_verse_height) // 2 - 50
+
+    for line in lines:
+        line_width = draw.textlength(line, font=verse_font)
+        x = (width - line_width) / 2
+        draw.text((x, y), line, font=verse_font, fill=(255, 255, 255))
+        y += line_heights[lines.index(line)] + 20
+
+    ref_width = draw.textlength(reference, font=ref_font)
+    ref_x = (width - ref_width) / 2
+    ref_y = y + 50
+    draw.text((ref_x, ref_y), reference, font=ref_font, fill=(255, 255, 255))
+
+    img.save(image_path, "JPEG", quality=95)
+
+def set_mac_wallpaper(image_path):
+    script = f"""
+    tell application "System Events"
+        set picture of every desktop to POSIX file "{image_path}"
+    end tell
+    """
+    subprocess.run(["osascript", "-e", script], check=True)
+
+def run_periodically():
+    check_data_exists()
+    df = pd.read_csv(CSV_PATH)
+
+    print("Quran Wallpaper started...")
+
+    while True:
+        try:
+            # Re-read config every cycle to allow dynamic updates
+            config = load_config()
+            interval = config['interval']
+            font_path = config['font']
+            w, h = map(int, config['resolution'].split('x'))
+
+            random_row = df.sample(1).iloc[0]
+            reference, verse_text = get_verse_text(random_row)
+            quote = f'"{verse_text}"'
+
+            surah_num = int(random_row['surah'])
+            ayah_num = int(random_row['ayah'])
+            filename = f"{surah_num}_{ayah_num}.jpg"
+            image_path = os.path.join(QURAN_DIR, filename)
+
+            if os.path.exists(image_path):
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Overwriting cached wallpaper: {reference}")
+            else:
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Generating new wallpaper: {reference}")
+
+            create_wallpaper(image_path, reference, quote, w, h, font_path)
+
+            set_mac_wallpaper(image_path)
+
+        except Exception as e:
+            print(f"An error occurred: {e}. Retrying next cycle...")
+
+        time.sleep(interval)
+
+# ==== Daemon Management (launchd) ====
+def start_daemon():
+    check_data_exists()
+    
+    # Always unload first to clear any stale state (prevents "Input/output error")
+    if os.path.exists(PLIST_PATH):
+        subprocess.run(["launchctl", "unload", PLIST_PATH], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+
+    script_path = os.path.abspath(__file__)
+    python_path = sys.executable
+    
+    plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{LABEL}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{python_path}</string>
+        <string>{script_path}</string>
+        <string>run</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/quran_wallpaper.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/quran_wallpaper_error.log</string>
+    <key>WorkingDirectory</key>
+    <string>{os.path.dirname(script_path)}</string>
+</dict>
+</plist>
+"""
+    with open(PLIST_PATH, 'w') as f:
+        f.write(plist_content)
+    
+    # Load the daemon
+    result = subprocess.run(["launchctl", "load", PLIST_PATH], capture_output=True, text=True)
+    
+    if result.returncode != 0:
+        print(f"Failed to start daemon:\n{result.stderr}")
+    else:
+        print("Daemon started successfully. It will run in the background and survive reboots.")
+
+def stop_daemon():
+    if not os.path.exists(PLIST_PATH):
+        print("Daemon is not running.")
+        return
+        
+    subprocess.run(["launchctl", "unload", PLIST_PATH], stderr=subprocess.DEVNULL)
+    os.remove(PLIST_PATH)
+    print("Daemon stopped successfully.")
+
+def status_daemon():
+    result = subprocess.run(["launchctl", "list"], capture_output=True, text=True)
+    if LABEL in result.stdout:
+        print("Daemon is currently running.")
+    else:
+        print("Daemon is not running.")
+
+# ==== CLI Interface ====
+def main():
+    parser = argparse.ArgumentParser(description="Quran Wallpaper Changer for macOS")
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+
+    subparsers.add_parser('start', help='Start the background daemon')
+    subparsers.add_parser('stop', help='Stop the background daemon')
+    subparsers.add_parser('status', help='Check if the daemon is running')
+    subparsers.add_parser('run', help='Run directly in foreground')
+    subparsers.add_parser('download', help='Download or update Quran data (Saheeh International)')
+
+    set_parser = subparsers.add_parser('set', help='Configure settings')
+    set_parser.add_argument('key', choices=['interval', 'font', 'resolution'], help='Setting to change')
+    set_parser.add_argument('value', help='New value (e.g., 3600, /path/to/font.ttf, 2560x1600)')
+
+    args = parser.parse_args()
+
+    ensure_dirs()
+
+    if args.command == 'start':
+        start_daemon()
+    elif args.command == 'stop':
+        stop_daemon()
+    elif args.command == 'status':
+        status_daemon()
+    elif args.command == 'run':
+        run_periodically()
+    elif args.command == 'download':
+        download_data()
+    elif args.command == 'set':
+        config = load_config()
+        if args.key == 'interval':
+            config['interval'] = int(args.value)
+        else:
+            config[args.key] = args.value
+        save_config(config)
+        print(f"Config updated: {args.key} = {args.value}")
+        print("If the daemon is running, it will pick up the new settings on the next cycle.")
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()

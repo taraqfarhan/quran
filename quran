@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+import pandas as pd
+from sys import argv
+
+# ==== UPDATE IF NEEDED =====
+
+CSV_PATH = "/Users/taraqfarhan/.quran/data/quran_en.csv"
+
+# ==== END OF UPDATE =====
+
+# Dictionary mapping Surah numbers to their English names
+SURAH_NAMES = [
+    "Al-Fatihah", "Al-Baqarah", "Aal-E-Imran", "An-Nisa", "Al-Ma'idah", "Al-An'am",
+    "Al-A'raf", "Al-Anfal", "At-Tawbah", "Yunus", "Hud", "Yusuf", "Ar-Ra'd", "Ibrahim",
+    "Al-Hijr", "An-Nahl", "Al-Isra", "Al-Kahf", "Maryam", "Ta-Ha", "Al-Anbiya", "Al-Hajj",
+    "Al-Mu'minun", "An-Nur", "Al-Furqan", "Ash-Shu'ara", "An-Naml", "Al-Qasas", "Al-Ankabut",
+    "Ar-Rum", "Luqman", "As-Sajdah", "Al-Ahzab", "Saba", "Fatir", "Ya-Sin", "As-Saffat",
+    "Sad", "Az-Zumar", "Ghafir", "Fussilat", "Ash-Shura", "Az-Zukhruf", "Ad-Dukhan",
+    "Al-Jathiyah", "Al-Ahqaf", "Muhammad", "Al-Fath", "Al-Hujurat", "Qaf", "Adh-Dhariyat",
+    "At-Tur", "An-Najm", "Al-Qamar", "Ar-Rahman", "Al-Waqi'ah", "Al-Hadid", "Al-Mujadila",
+    "Al-Hashr", "Al-Mumtahanah", "As-Saff", "Al-Jumu'ah", "Al-Munafiqun", "At-Taghabun",
+    "At-Talaq", "At-Tahrim", "Al-Mulk", "Al-Qalam", "Al-Haqqah", "Al-Ma'arij", "Nuh",
+    "Al-Jinn", "Al-Muzzammil", "Al-Muddaththir", "Al-Qiyamah", "Al-Insan", "Al-Mursalat",
+    "An-Naba", "An-Nazi'at", "Abasa", "At-Takwir", "Al-Infitar", "Al-Mutaffifin",
+    "Al-Inshiqaq", "Al-Buruj", "At-Tariq", "Al-A'la", "Al-Ghashiyah", "Al-Fajr",
+    "Al-Balad", "Ash-Shams", "Al-Lail", "Ad-Duha", "Ash-Sharh", "At-Tin", "Al-Alaq",
+    "Al-Qadr", "Al-Bayyinah", "Az-Zalzalah", "Al-Adiyat", "Al-Qari'ah", "At-Takathur",
+    "Al-Asr", "Al-Humazah", "Al-Fil", "Quraish", "Al-Ma'un", "Al-Kawthar", "Al-Kafirun",
+    "An-Nasr", "Al-Masad", "Al-Ikhlas", "Al-Falaq", "An-Nas"
+]
+
+def display_verse(row):
+    """Displays the verse and reference as plain text from a DataFrame row."""
+    surah_num = int(row['surah'])
+    ayah_num = int(row['ayah'])
+    verse_text = row['text']
+
+    surah_name = SURAH_NAMES[surah_num - 1]
+
+    # Format reference
+    reference = f"{surah_name} ({surah_num}:{ayah_num})"
+
+    # Combine verse and reference into a single string
+    print(f'{verse_text} - {reference}')
+
+
+if __name__ == "__main__":
+    # Read the CSV file
+    try:
+        df = pd.read_csv(CSV_PATH)
+    except FileNotFoundError:
+        print(f"Error: Could not find '{CSV_PATH}'")
+        exit(1)
+
+    # Determine which row to display
+    if len(argv) == 3:
+        try:
+            surah_num, ayah_num = int(argv[1]), int(argv[2])
+            # Filter for the specific verse
+            selected_row = df[(df['surah'] == surah_num) & (df['ayah'] == ayah_num)]
+
+            if selected_row.empty:
+                print(f"Verse {surah_num}:{ayah_num} not found in CSV.")
+                exit(1)
+
+            row = selected_row.iloc[0]
+        except ValueError:
+            print("Invalid arguments. Please provide numbers for Surah and Verse.")
+            exit(1)
+    else:
+        # If no arguments, pick one random row directly from the DataFrame
+        row = df.sample(1).iloc[0]
+
+    # Display the selected row
+    display_verse(row)
