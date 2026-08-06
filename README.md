@@ -2,6 +2,18 @@
 
 A suite of command-line utilities for macOS to display English Quran verses in the terminal, extract verse data, and set dynamically generated Quran verse wallpapers on your desktop.
 
+## Table of Contents
+
+[Features](#features) <br>
+[File and Directory Structure](#file-and-directory-structure) <br>
+[Requirements](#requirements) <br>
+[Installation](#installation) <br>
+[Updating](#updating) <br>
+[Usage Instructions](#usage-instructions) <br>
+&nbsp;&nbsp;&nbsp;&nbsp;[quran](#1-quran) <br>
+&nbsp;&nbsp;&nbsp;&nbsp;[quran_wallpaper](#2-quran_wallpaper) <br>
+&nbsp;&nbsp;&nbsp;&nbsp;[extract_data.py](#3-extract_data.py) <br>
+
 ---
 
 ## Features
@@ -13,6 +25,29 @@ A suite of command-line utilities for macOS to display English Quran verses in t
    - Manages a persistent macOS `launchd` background daemon to automatically change wallpapers at set intervals and start at login.
 3. **Data Extractor (`extract_data.py`)**
    - Fetches English Quran translations (by default Saheeh International) from the Al-Quran Cloud API and exports them to a CSV file.
+
+### Wallpaper Screenshots
+
+All of the fonts I've used here are in `/System/Library/Fonts/Supplemental/` directory. You can use any font installed on your system.
+
+<p align="center">
+  <img src="images/wallpaper-0.png" width="600"><br>
+  <em>Georgia.ttf (Default Font)</em>
+</p>
+
+<table width="100%">
+   <tr>
+   <td width="50%" align="center">
+      <img src="images/wallpaper-1.png" width="100%"><br>
+      <em>Chalkduster.ttf</em>
+   </td>
+
+   <td width="50%" align="center">
+      <img src="images/wallpaper-2.png" width="100%"><br>
+      <em>AmericanTypewriter.ttc</em>
+   </td>
+   </tr>
+</table>
 
 ---
 
@@ -65,6 +100,19 @@ This script will automatically install the required Python packages, set up the 
 
 ---
 
+## Updating
+
+To update the Quran CLI and wallpaper generator, simply pull the latest changes from the repository:
+
+```bash
+cd ~/Library/quran  # move into the cloned repository directory
+git pull origin main
+```
+
+This will fetch the latest version of the code and update your local installation.
+
+---
+
 ## Usage Instructions
 
 ### 1. `quran`
@@ -86,7 +134,7 @@ Generates wallpaper images with Quranic verses and updates your desktop wallpape
 #### Daemon & Control Commands
 
 ```bash
-quran_wallpaper start # Start Background Daemon (Runs at login & survives reboot)
+quran_wallpaper start # Start/Restart Background Daemon (Runs at login & survives reboot)
 # Registers and loads a macOS launchctl daemon (`com.user.quran-wallpaper.plist`)
 
 quran_wallpaper status # Check Daemon Status
@@ -110,7 +158,7 @@ quran_wallpaper set <key> <value>
 | :----------- | :--------------------------------- | :----------------------------------------------- |
 | `interval`   | Refresh interval in seconds        | `3600`                                           |
 | `resolution` | Screen resolution (`WidthxHeight`) | `2560x1600`                                      |
-| `font`       | Absolute path to font              | `/System/Library/Fonts/Supplemental/Georgia.ttf` |
+| `font`       | Absolute path to font file         | `/System/Library/Fonts/Supplemental/Georgia.ttf` |
 
 #### Interval
 
