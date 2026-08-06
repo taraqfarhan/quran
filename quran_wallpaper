@@ -277,14 +277,14 @@ def status_daemon():
 
 # ==== CLI Interface ====
 def main():
-    parser = argparse.ArgumentParser(description="Quran Wallpaper Changer for macOS")
-    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    parser = argparse.ArgumentParser(description="Quran Wallpaper Changer for macOS", epilog="Use 'quran_wallpaper <command> -h' for more information on a command (e.g. 'quran_wallpaper set -h')")
+    subparsers = parser.add_subparsers(title = "Commands", dest='command')
 
-    subparsers.add_parser('start', help='Start the background daemon')
+    subparsers.add_parser('start', help='Start/Restart the background daemon')
     subparsers.add_parser('stop', help='Stop the background daemon')
     subparsers.add_parser('status', help='Check if the daemon is running')
-    subparsers.add_parser('run', help='Run directly in foreground')
-    subparsers.add_parser('download', help='Download or update Quran data (Saheeh International)')
+    subparsers.add_parser('run', help='Run directly in foreground (Interactive mode, for testing or debugging)')
+    subparsers.add_parser('download', help='Download/Update Quran data (Saheeh International)')
 
     set_parser = subparsers.add_parser('set', help='Configure settings')
     set_parser.add_argument('key', choices=['interval', 'font', 'resolution'], help='Setting to change')
